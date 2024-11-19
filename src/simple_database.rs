@@ -5,6 +5,7 @@ struct SimpleDatabase {
     db_path: String,
     db_segments: List<String>,
     db_recovery: String,
+    db_indexes: HashMap<String, String>
 }
 
 impl SimpleDatabase {
