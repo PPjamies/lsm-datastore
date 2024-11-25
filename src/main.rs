@@ -1,15 +1,14 @@
-mod simple_datastore;
+mod data;
+mod datastore;
 mod file_handler;
 
-use file_handler::Data;
-use simple_datastore::DBConfig;
-use simple_datastore::SimpleDatastore;
-use std::io;
+use data::Data;
+use datastore::{DBConfig, DBStore};
 
-fn db_init() -> SimpleDatastore {
+fn db_init() -> DBStore {
     let segments = vec![
         String::from("<path-to-first-segment>"),
-        String::from("<path-to-second-segment>")
+        String::from("<path-to-second-segment>"),
     ];
 
     let db_config: DBConfig = DBConfig::new(
@@ -19,22 +18,24 @@ fn db_init() -> SimpleDatastore {
         String::from("<path-to-crash-recovery-file>"),
     );
 
-    SimpleDatastore::new(db_config)
+    DBStore::new(db_config)
 }
 
 fn main() {
     println!("Welcome to Simple DataStore!");
 
-    let db: SimpleDatastore = db_init();
+    let db: DBStore = db_init();
 
     println!("Enter key:");
     let mut key = String::new();
-    io::stdin().read_line(&mut key)
+    std::io::stdin()
+        .read_line(&mut key)
         .expect("Failed to read key");
 
     println!("Enter value:");
     let mut val = String::new();
-    io::stdin().read_line(&mut val)
+    std::io::stdin()
+        .read_line(&mut val)
         .expect("Failed to read value");
 
     let data: Data = Data::new(key, val);
