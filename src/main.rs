@@ -1,6 +1,7 @@
 mod data;
 mod datastore;
 mod log_handler;
+mod compact;
 
 use data::Data;
 use datastore::{DBConfig, DBStore};

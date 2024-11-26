@@ -1,31 +1,41 @@
 pub struct DBConfig {
-    pub db_name: String,
-    pub db_path: String,
-    pub db_segments: Vec<String>,
-    pub db_recovery: String,
+    pub name: String,
+    pub log_path_db: String,
+    pub log_path_index: String,
+    pub path_offset: String,
 }
 
 impl DBConfig {
     pub fn new(
-        db_name: String,
-        db_path: String,
-        db_segments: Vec<String>,
-        db_recovery: String,
+        name: String,
+        log_path_db: String,
+        log_path_index: String,
+        path_offset: String,
     ) -> Self {
         Self {
-            db_name,
-            db_path,
-            db_segments,
-            db_recovery,
+            name,
+            log_path_db,
+            log_path_index,
+            path_offset,
         }
     }
-    pub fn get_db_path(&self) -> &str {
-        &self.db_path
+
+    pub fn get_log_path_db(&self) -> &str {
+        &self.log_path_db
     }
+
+    pub fn get_log_path_index(&self) -> &str {
+        &self.log_path_index
+    }
+
+    pub fn get_path_offset(&self) -> &str {
+        &self.path_offset
+    }
+
     pub fn print(&self) -> String {
         format!(
-            "Database: {}, Path: {}, Recovery: {}, Segments: {:?}",
-            self.db_name, self.db_path, self.db_recovery, self.db_segments
+            "Database: {}, DB Log Path: {}, Index Log Path: {}, Offset Path: {},",
+            self.name, self.log_path_db, self.log_path_index, self.path_offset
         )
     }
 }
