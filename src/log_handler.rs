@@ -6,7 +6,7 @@ use std::io::{
     BufRead, BufReader, BufWriter, Error, ErrorKind, Read, Result, Seek, SeekFrom, Write,
 };
 
-/// This function is to return the last offset data was stored at
+/// This function returns the last offset data was stored at
 fn get_log_offset(file_path: &str) -> Result<i64> {
     let mut file: File = OpenOptions::new()
         .read(true)
@@ -20,9 +20,7 @@ fn get_log_offset(file_path: &str) -> Result<i64> {
     Ok(offset)
 }
 
-/// This function is to update the last offset in the db log file
-/// This offset in particular represents the last line number that data was appended to in the db log file
-/// Offsets are used for indexing
+/// This function is to update the last offset data was stored at
 fn incr_log_offset(file_path: &str) -> Result<()> {
     let mut file: File = OpenOptions::new()
         .read(true)
@@ -44,9 +42,18 @@ fn incr_log_offset(file_path: &str) -> Result<()> {
     Ok(())
 }
 
-/// This function is to append an index to the index log file
-/// The index log file keeps track of all operations made on the index hashmap
-/// Index log is used to recover lost indexes once program stops or crashes
+/// This function returns a list of DB Index objects
+fn get_log_indexes(file_path: &str) -> Result<Vec<DBIndex>> {
+    let file: File = File::open(file_path)?;
+    let reader: BufReader<File> = BufReader::new(file);
+
+    let indexes: Vec<DBIndex> = bincode::deserialize_from(reader)
+        .map_err(|e| Error::new(ErrorKind::InvalidData, e))?;
+
+    Ok(indexes)
+}
+
+/// This function is to append a DB Index object to the index log file
 fn append_log_index(file_path: &str, index: &DBIndex) -> Result<()> {
     let file: File = OpenOptions::new()
         .append(true)
@@ -54,8 +61,8 @@ fn append_log_index(file_path: &str, index: &DBIndex) -> Result<()> {
 
     let mut writer: BufWriter<File> = BufWriter::new(file);
 
-    let serialized_index =
-        bincode::serialize(index).map_err(|e| Error::new(ErrorKind::Other, e))?;
+    let serialized_index = bincode::serialize(index)
+        .map_err(|e| Error::new(ErrorKind::Other, e))?;
 
     writer.write_all(&serialized_index)?;
     writer.write_all(b"\n")?;
@@ -71,7 +78,8 @@ pub fn append_data_to_log(file_path: &str, data: &Data) -> Result<()> {
 
     let mut writer: BufWriter<File> = BufWriter::new(file);
 
-    let serialized_data = bincode::serialize(data).map_err(|e| Error::new(ErrorKind::Other, e))?;
+    let serialized_data = bincode::serialize(data)
+        .map_err(|e| Error::new(ErrorKind::Other, e))?;
 
     writer.write_all(&serialized_data)?;
     writer.write_all(b"\n")?;
@@ -87,8 +95,8 @@ pub fn find_data_in_log(file_path: &str, search_key: &str) -> Result<Option<Data
         let line = line?; // read line as string
         let bytes = line.as_bytes(); //convert to byte
 
-        let data: Data =
-            bincode::deserialize(bytes).map_err(|e| Error::new(ErrorKind::InvalidData, e))?;
+        let data: Data = bincode::deserialize(bytes)
+                .map_err(|e| Error::new(ErrorKind::InvalidData, e))?;
 
         if search_key == data.key {
             return Ok(Some(data));
