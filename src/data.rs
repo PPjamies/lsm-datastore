@@ -7,8 +7,8 @@ pub struct Data {
 }
 
 impl Data {
-    pub fn new(key: String, val: String) -> Data {
-        Data { key, val }
+    pub fn new(key: String, val: String) -> Self {
+        Self { key, val }
     }
     pub fn get_key(&self) -> &str {
         &self.key

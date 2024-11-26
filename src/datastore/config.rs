@@ -6,13 +6,21 @@ pub struct DBConfig {
 }
 
 impl DBConfig {
-    pub fn new(db_name: String, db_path: String, db_segments: Vec<String>, db_recovery: String) -> DBConfig {
-        DBConfig {
+    pub fn new(
+        db_name: String,
+        db_path: String,
+        db_segments: Vec<String>,
+        db_recovery: String,
+    ) -> Self {
+        Self {
             db_name,
             db_path,
             db_segments,
             db_recovery,
         }
+    }
+    pub fn get_db_path(&self) -> &str {
+        &self.db_path
     }
     pub fn print(&self) -> String {
         format!(
