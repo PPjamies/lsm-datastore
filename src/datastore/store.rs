@@ -1,7 +1,7 @@
 use crate::data::Data;
 use crate::datastore::DBConfig;
 use crate::datastore::DBIndex;
-use crate::log_handler::{append_to_log, find_in_log};
+use crate::log_handler::{append_data_to_log, find_data_in_log};
 
 use crate::datastore::index::Operation;
 use std::collections::HashMap;
@@ -26,11 +26,11 @@ impl DBStore {
     }
 
     pub fn set(&mut self, data: Data) {
-        append_to_log(self.config.get_log_path_db(), &data).expect("Unable to set data!");
+        append_data_to_log(self.config.get_log_path_db(), &data).expect("Unable to set data!");
     }
 
     pub fn get(&self, key: &str) -> Result<Option<Data>> {
-        find_in_log(self.config.get_log_path_db(), &key)
+        find_data_in_log(self.config.get_log_path_db(), &key)
     }
 
     fn restore_indexes(&mut self) -> Result<()> {
@@ -58,4 +58,6 @@ impl DBStore {
 
         Ok(())
     }
+
+
 }
