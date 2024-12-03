@@ -12,12 +12,6 @@ impl DBConfig {
             log_path_index,
         }
     }
-    pub fn get_log_path_db(&self) -> &str {
-        &self.log_path_db
-    }
-    pub fn get_log_path_index(&self) -> &str {
-        &self.log_path_index
-    }
     pub fn print(&self) -> String {
         format!(
             "Database: {}, DB Log Path: {}, Index Log Path: {}",

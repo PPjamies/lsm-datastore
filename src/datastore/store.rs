@@ -3,13 +3,19 @@ use crate::datastore::DBConfig;
 use crate::datastore::DBIndex;
 
 use crate::datastore::index::Operation;
+use crate::fileutil::log_handler::write;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufReader, Result};
 
+pub struct MemIndexBucket {
+    pub offset: u64,
+    pub length: usize,
+}
+
 pub struct DBStore {
-    config: DBConfig,
-    indexes: HashMap<String, String>,
+    pub config: DBConfig,
+    pub indexes: HashMap<String, MemIndexBucket>,
 }
 
 impl DBStore {
@@ -19,15 +25,18 @@ impl DBStore {
             indexes: HashMap::new(),
         }
     }
-    pub fn get_config(&self) -> &DBConfig {
-        &self.config
-    }
 
     pub fn put(&mut self, data: DBData) {
-        if (self.index_exists(data.get_key())) {
-            // todo: get offset and length to update data log
-        } else {
-            // todo: append to log file
+        let (offset, length) = write(&self.config.log_path_db, &data).unwrap();
+
+        if (self.index_exists(&data.key)) {
+            self.indexes
+                .insert(data.key, MemIndexBucket { offset, length });
+
+            write(
+                &self.config.log_path_index,
+                DBIndex::new(&data.key, offset, length, Operation::UPDATE),
+            );
         }
     }
 

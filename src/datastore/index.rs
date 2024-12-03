@@ -24,18 +24,6 @@ impl DBIndex {
             operation,
         }
     }
-    pub fn get_key(&self) -> &String {
-        &self.key
-    }
-    pub fn get_offset(&self) -> &u64 {
-        &self.offset
-    }
-    pub fn get_length(&self) -> &usize {
-        &self.length
-    }
-    pub fn get_operation(&self) -> &Operation {
-        &self.operation
-    }
     pub fn print(&self) -> String {
         format!(
             "Key: {}, Offset: {}, Length: {}, Operation: {:?}",
