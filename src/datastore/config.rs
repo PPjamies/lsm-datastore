@@ -1,3 +1,4 @@
+#[derive(Debug)]
 pub struct DBConfig {
     pub name: String,
     pub log_path_db: String,
@@ -11,11 +12,5 @@ impl DBConfig {
             log_path_db,
             log_path_index,
         }
-    }
-    pub fn print(&self) -> String {
-        format!(
-            "Database: {}, DB Log Path: {}, Index Log Path: {}",
-            self.name, self.log_path_db, self.log_path_index
-        )
     }
 }

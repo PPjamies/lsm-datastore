@@ -1,16 +1,33 @@
+use crate::datastore::indexable::{Indexable, Operation};
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct DBData {
     pub key: String,
     pub val: String,
+    pub operation: Operation,
+    pub timestamp: i64,
 }
 
 impl DBData {
-    pub fn new(key: String, val: String) -> Self {
-        Self { key, val }
+    pub fn new(key: String, val: String, operation: Operation, timestamp: i64) -> Self {
+        Self {
+            key,
+            val,
+            operation,
+            timestamp,
+        }
     }
-    pub fn print(&self) -> String {
-        format!("Key: {}, Val: {}", self.key, self.val)
+}
+
+impl Indexable for DBData {
+    fn key(&self) -> &str {
+        &self.key
+    }
+    fn operation(&self) -> &Operation {
+        &self.operation
+    }
+    fn timestamp(&self) -> &i64 {
+        &self.timestamp
     }
 }

@@ -1,14 +1,15 @@
-use crate::datastore::{DBData, DBIndex};
+use crate::datastore::indexable::Indexable;
 use bincode;
+use chrono::Utc;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, Error, ErrorKind, Read, Result, Seek, SeekFrom, Write};
 
-/// functions read and write into log file and index file
+/// This function reads data from the given byte offset
 pub fn read<T>(file_path: &str, offset: u64, length: usize) -> Result<T>
 where
-    T: DeserializeOwned,
+    T: DeserializeOwned + Indexable,
 {
     let mut file: File = File::open(file_path)?;
     file.seek(SeekFrom::Start(offset))?;
@@ -19,52 +20,75 @@ where
     bincode::deserialize_from(&buffer).map_err(Error::new)
 }
 
-pub fn write<T>(file_path: &str, data: &T) -> Result<(u64, usize)>
+/// This function writes to the end of a file and returns its byte offset and length
+pub fn write<T>(file_path: &str, data: T) -> Result<(u64, usize, i64)>
 where
-    T: Serialize,
+    T: Serialize + Indexable,
 {
     let mut file: File = OpenOptions::new()
         .write(true)
         .append(true)
         .open(file_path)?;
 
-    let offset = file.seek(SeekFrom::End(0))?;
+    let offset: u64 = file.seek(SeekFrom::End(0))?;
 
     let data: Vec<u8> = bincode::serialize(data).map_err(|e| Error::new(ErrorKind::Other, e))?;
     let length: usize = data.len();
 
     file.write_all(&data)?;
+    file.write_all(b"\n")?;
 
-    Ok((offset, length))
+    let timestamp: i64 = Utc::now().timestamp_millis();
+
+    Ok((offset, length, timestamp))
 }
 
-/// This function returns a list of DB Index objects
-fn get_log_indexes(file_path: &str) -> Result<Vec<DBIndex>> {
+/// This function scans the log file for a given key and returns the newest data
+pub fn scan<T>(file_path: &str, key: &str) -> Result<(T, u64, usize)>
+where
+    T: Indexable,
+{
+    let file: File = File::open(file_path)?;
+    let mut reader: BufReader<File> = BufReader::new(file);
+
+    let mut newest_data: Option<T> = None;
+    let mut offset: u64 = 0;
+    let mut length: usize = 0;
+
+    let mut current_offset: u64 = 0;
+    for line in reader.lines() {
+        let line = line?;
+        let bytes = line.as_bytes();
+
+        let data: T =
+            bincode::deserialize(bytes).map_err(|e| Error::new(ErrorKind::InvalidData, e))?;
+
+        if key == data.key() {
+            let is_newer_data = match &newest_data {
+                Some(old_data) => data.timestamp() > old_data.timestamp(),
+                None => true,
+            };
+
+            if is_newer_data {
+                newest_data = Some(data);
+                offset = current_offset;
+                length = bytes.len();
+            }
+        }
+
+        current_offset += bytes.len() as u64;
+    }
+
+    Ok((newest_data, offset, length))
+}
+
+/// This function reads everything
+pub fn restore<T>(file_path: &str) -> Result<Vec<T>>
+where
+    T: DeserializeOwned + Indexable,
+{
     let file: File = File::open(file_path)?;
     let reader: BufReader<File> = BufReader::new(file);
 
-    let indexes: Vec<DBIndex> =
-        bincode::deserialize_from(reader).map_err(|e| Error::new(ErrorKind::InvalidData, e))?;
-
-    Ok(indexes)
-}
-
-/// scan log file
-pub fn find_data_in_log(file_path: &str, search_key: &str) -> Result<Option<DBData>> {
-    let file = File::open(file_path)?;
-    let reader = BufReader::new(file);
-
-    for line in reader.lines() {
-        let line = line?; // read line as string
-        let bytes = line.as_bytes(); //convert to byte
-
-        let data: DBData =
-            bincode::deserialize(bytes).map_err(|e| Error::new(ErrorKind::InvalidData, e))?;
-
-        if search_key == data.key {
-            return Ok(Some(data));
-        }
-    }
-
-    Ok(None)
+    bincode::deserialize_from(reader).map_err(|e| Error::new(ErrorKind::InvalidData, e))
 }

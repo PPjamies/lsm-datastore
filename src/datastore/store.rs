@@ -3,19 +3,22 @@ use crate::datastore::DBConfig;
 use crate::datastore::DBIndex;
 
 use crate::datastore::index::Operation;
-use crate::fileutil::log_handler::write;
+use crate::datastore::indexable::Indexable;
+use crate::fileutil::log_handler::{read, restore, scan, write};
+use chrono::Utc;
 use std::collections::HashMap;
-use std::fs::File;
-use std::io::{BufReader, Result};
+use std::io::{Error, ErrorKind, Result};
 
-pub struct MemIndexBucket {
+#[derive(Debug)]
+pub struct IndexBucket {
     pub offset: u64,
     pub length: usize,
 }
 
+#[derive(Debug)]
 pub struct DBStore {
     pub config: DBConfig,
-    pub indexes: HashMap<String, MemIndexBucket>,
+    pub indexes: HashMap<String, IndexBucket>,
 }
 
 impl DBStore {
@@ -27,73 +30,100 @@ impl DBStore {
     }
 
     pub fn put(&mut self, data: DBData) {
-        let (offset, length) = write(&self.config.log_path_db, &data).unwrap();
+        let (offset, length, timestamp) = write(&self.config.log_path_db, &data).unwrap();
 
-        if (self.index_exists(&data.key)) {
+        if self.indexes.contains_key(&data.key) {
             self.indexes
-                .insert(data.key, MemIndexBucket { offset, length });
+                .insert(data.key.clone(), IndexBucket { offset, length });
 
             write(
                 &self.config.log_path_index,
-                DBIndex::new(&data.key, offset, length, Operation::UPDATE),
-            );
+                DBIndex::new(
+                    data.key.clone(),
+                    offset,
+                    length,
+                    Operation::UPDATE,
+                    timestamp
+                )
+            ).expect("Unable to write to index log");
         }
     }
 
-    pub fn get(&self, key: &str) -> Result<Option<DBData>> {
-        if (self.index_exists(key)) {
-            // todo: use byte offset to grab data from log file
+    pub fn get(&self, key: &str) -> Result<DBData> {
+        if self.indexes.contains_key(&key) {
+            let offset: u64 = self.indexes.get(&key).unwrap().offset;
+            let length: usize = self.indexes.get(&key).unwrap().length;
+            read(&self.config.log_path_db, offset, length)
         } else {
-            // todo: scan log file
+            // scan db for given key and return just the data
+            match scan(&self.config.log_path_db, &key) {
+                Ok(Some((data, _, _))) => Ok(data),
+                Ok(None) => Err(Error::new(ErrorKind::NotFound, "Key not found in log")),
+                Err(err) => Err(err),
+            }
         }
     }
 
-    pub fn set_index(&mut self, key: &str) {
-        if (self.index_exists(key)) {
-        } else {
-            // scan log file for key
-            // take note of offset in bytes
-            // store key, offset, length in index file
-            // store key and offset in hashmap
+    pub fn create_index(&mut self, key: &str) {
+        if !self.indexes.contains_key(&key) {
+            // scan db for a given key > take note of offset and length of the data once found
+            // add the index to in memory hashmap and add it to index log
+            match scan(&self.config.log_path_index, &key) {
+                Ok(Some((_, offset, length))) => {
+                    self.indexes
+                        .insert(key.to_string(), IndexBucket { offset, length });
+
+                    write(
+                        &self.config.log_path_index,
+                        DBIndex::new(
+                            key.to_string(),
+                            offset,
+                            length,
+                            Operation::ADD,
+                            Utc::now().timestamp_millis(),
+                        ),
+                    ).expect("Unable to write to index log");
+                }
+            }
         }
     }
 
-    pub fn remove_index(&mut self, key: &str) {
-        if (self.index_exists(key)) {
-            // todo: remove from hashmap
-            // todo: add a (key, offset, length, DELETE) to the index log
+    pub fn delete_index(&mut self, key: &str) {
+        if self.indexes.contains_key(&key) {
+            self.indexes.remove(&key);
+            write(
+                &self.config.log_path_index,
+                DBIndex::new(
+                    key.to_string(),
+                    0,
+                    0,
+                    Operation::DELETE,
+                    Utc::now().timestamp_millis(),
+                ),
+            ).expect("Unable to remove index");
         }
     }
 
-    fn index_exists(&self, key: &str) -> bool {
-        self.indexes.contains_key(key)
-    }
-
-    fn restore_indexes(&mut self) -> Result<()> {
-        let log_path_indexes: &str = self.get_config().get_log_path_db();
-
-        // move this logic to long handler
-        let file: File = File::open(log_path_indexes)?;
-        let reader: BufReader<File> = BufReader::new(file);
-
-        let indexes: Vec<DBIndex> = bincode::deserialize_from(reader)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-
-        // iterate res and restore hashmap
-        let mut db_indexes: HashMap<String, String> = HashMap::new();
+    fn restore_indexes(&mut self) {
+        let mut db_indexes: HashMap<String, IndexBucket> = HashMap::new();
+        let indexes: Vec<DBIndex> = restore(&self.config.log_path_index).unwrap();
         for index in indexes {
-            match index.get_operation() {
+            match index.operation() {
                 Operation::ADD | Operation::UPDATE => {
-                    db_indexes.insert(index.get_key().clone(), index.get_offset().clone());
+                    db_indexes.insert(
+                        index.key().to_string(),
+                        IndexBucket {
+                            offset: index.offset,
+                            length: index.length,
+                        },
+                    );
                 }
                 Operation::DELETE => {
-                    db_indexes.remove(index.get_key());
+                    db_indexes.remove(index.key());
                 }
             }
         }
 
         self.indexes = db_indexes;
-
-        Ok(())
     }
 }

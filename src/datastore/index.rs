@@ -1,33 +1,41 @@
+use crate::datastore::indexable::{Indexable, Operation};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug)]
-pub enum Operation {
-    ADD,
-    UPDATE,
-    DELETE,
-}
-
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct DBIndex {
-    key: String,
-    offset: u64,
-    length: usize,
-    operation: Operation,
+    pub key: String,
+    pub offset: u64,
+    pub length: usize,
+    pub operation: Operation,
+    pub timestamp: i64,
 }
 
 impl DBIndex {
-    pub fn new(key: String, offset: u64, length: usize, operation: Operation) -> Self {
+    pub fn new(
+        key: String,
+        offset: u64,
+        length: usize,
+        operation: Operation,
+        timestamp: i64,
+    ) -> Self {
         Self {
             key,
             offset,
             length,
             operation,
+            timestamp,
         }
     }
-    pub fn print(&self) -> String {
-        format!(
-            "Key: {}, Offset: {}, Length: {}, Operation: {:?}",
-            self.key, self.offset, self.length, self.operation
-        )
+}
+
+impl Indexable for DBIndex {
+    fn key(&self) -> &str {
+        &self.key
+    }
+    fn operation(&self) -> &Operation {
+        &self.operation
+    }
+    fn timestamp(&self) -> &i64 {
+        &self.timestamp
     }
 }
