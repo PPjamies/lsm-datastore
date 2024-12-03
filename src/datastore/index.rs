@@ -10,31 +10,36 @@ pub enum Operation {
 #[derive(Serialize, Deserialize)]
 pub struct DBIndex {
     key: String,
-    offset: String,
+    offset: u64,
+    length: usize,
     operation: Operation,
 }
 
 impl DBIndex {
-    pub fn new(key: String, offset: String, operation: Operation) -> Self {
+    pub fn new(key: String, offset: u64, length: usize, operation: Operation) -> Self {
         Self {
             key,
             offset,
+            length,
             operation,
         }
     }
     pub fn get_key(&self) -> &String {
         &self.key
     }
-    pub fn get_offset(&self) -> &String {
+    pub fn get_offset(&self) -> &u64 {
         &self.offset
+    }
+    pub fn get_length(&self) -> &usize {
+        &self.length
     }
     pub fn get_operation(&self) -> &Operation {
         &self.operation
     }
     pub fn print(&self) -> String {
         format!(
-            "Key: {}, Offset: {}, Operation: {:?}",
-            self.key, self.offset, self.operation
+            "Key: {}, Offset: {}, Length: {}, Operation: {:?}",
+            self.key, self.offset, self.length, self.operation
         )
     }
 }

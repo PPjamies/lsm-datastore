@@ -1,9 +1,7 @@
-mod data;
 mod datastore;
-mod log_handler;
-mod compact;
+mod fileutil;
 
-use data::Data;
+use datastore::data::DBData;
 use datastore::{DBConfig, DBStore};
 
 fn db_init() -> DBStore {
@@ -15,8 +13,7 @@ fn db_init() -> DBStore {
     let db_config: DBConfig = DBConfig::new(
         String::from("Simple Datastore"),
         String::from("<path-to-log-file>"),
-        segments,
-        String::from("<path-to-crash-recovery-file>"),
+        "".to_string(),
     );
 
     DBStore::new(db_config)
@@ -39,7 +36,7 @@ fn main() {
         .read_line(&mut val)
         .expect("Failed to read value");
 
-    let data: Data = Data::new(key, val);
+    let data: DBData = DBData::new(key, val);
 
     println!("Key and value stored!");
 }
