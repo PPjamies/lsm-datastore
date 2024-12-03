@@ -30,12 +30,15 @@ impl DBStore {
     }
 
     pub fn put(&mut self, data: DBData) {
+        // write data to log file
         let (offset, length, timestamp) = write(&self.config.log_path_db, &data).unwrap();
 
         if self.indexes.contains_key(&data.key) {
+            // update in memory index
             self.indexes
                 .insert(data.key.clone(), IndexBucket { offset, length });
 
+            // update index log
             write(
                 &self.config.log_path_index,
                 DBIndex::new(
@@ -51,11 +54,14 @@ impl DBStore {
 
     pub fn get(&self, key: &str) -> Result<DBData> {
         if self.indexes.contains_key(&key) {
+            // get offset and length from in memory index
             let offset: u64 = self.indexes.get(&key).unwrap().offset;
             let length: usize = self.indexes.get(&key).unwrap().length;
+
+            // read directly from byte offset in log file
             read(&self.config.log_path_db, offset, length)
         } else {
-            // scan db for given key and return just the data
+            // scan log file for given key and return just the data
             match scan(&self.config.log_path_db, &key) {
                 Ok(Some((data, _, _))) => Ok(data),
                 Ok(None) => Err(Error::new(ErrorKind::NotFound, "Key not found in log")),
@@ -66,13 +72,16 @@ impl DBStore {
 
     pub fn create_index(&mut self, key: &str) {
         if !self.indexes.contains_key(&key) {
+
             // scan db for a given key > take note of offset and length of the data once found
-            // add the index to in memory hashmap and add it to index log
             match scan(&self.config.log_path_index, &key) {
                 Ok(Some((_, offset, length))) => {
+
+                    // add to in memory index
                     self.indexes
                         .insert(key.to_string(), IndexBucket { offset, length });
 
+                    // add to index log
                     write(
                         &self.config.log_path_index,
                         DBIndex::new(
@@ -90,7 +99,10 @@ impl DBStore {
 
     pub fn delete_index(&mut self, key: &str) {
         if self.indexes.contains_key(&key) {
+            // remove from in memory index
             self.indexes.remove(&key);
+
+            // mark index for deletion in index log
             write(
                 &self.config.log_path_index,
                 DBIndex::new(
