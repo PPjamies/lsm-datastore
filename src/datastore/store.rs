@@ -4,7 +4,7 @@ use crate::datastore::DBIndex;
 
 use crate::datastore::index::Operation;
 use crate::datastore::indexable::Indexable;
-use crate::fileutil::log_handler::{read, restore, scan, write};
+use crate::file::log_handler::{read, restore, scan, write};
 use chrono::Utc;
 use std::collections::HashMap;
 use std::io::{Error, ErrorKind, Result};
