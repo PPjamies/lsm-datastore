@@ -20,7 +20,7 @@ where
     bincode::deserialize_from(&buffer).map_err(Error::new)
 }
 
-/// This function writes to the end of a file and returns its byte offset and length
+/// This function appends data to end of file and returns its byte offset, length, and timestamp
 pub fn write<T>(file_path: &str, data: T) -> Result<(u64, usize, i64)>
 where
     T: Serialize + Indexable,
@@ -43,7 +43,8 @@ where
     Ok((offset, length, timestamp))
 }
 
-/// This function scans the log file for a given key and returns the newest data
+/// This function scans an append only log file for a given key and returns the newest data entry
+/// This function also returns the newest data entry's offset and length
 pub fn scan<T>(file_path: &str, key: &str) -> Result<(T, u64, usize)>
 where
     T: Indexable,
@@ -82,7 +83,7 @@ where
     Ok((newest_data, offset, length))
 }
 
-/// This function reads everything
+/// This function reads everything from the database into a vector
 pub fn restore<T>(file_path: &str) -> Result<Vec<T>>
 where
     T: DeserializeOwned + Indexable,
