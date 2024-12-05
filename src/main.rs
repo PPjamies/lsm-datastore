@@ -1,19 +1,16 @@
 mod datastore;
-mod fileutil;
+mod file;
 
+use chrono::Utc;
 use datastore::data::DBData;
 use datastore::{DBConfig, DBStore};
+use crate::datastore::indexable::Operation;
 
 fn db_init() -> DBStore {
-    let segments = vec![
-        String::from("<path-to-first-segment>"),
-        String::from("<path-to-second-segment>"),
-    ];
-
     let db_config: DBConfig = DBConfig::new(
         String::from("Simple Datastore"),
         String::from("<path-to-log-file>"),
-        "".to_string(),
+        String::from("<path-to-log-index-file>"),
     );
 
     DBStore::new(db_config)
@@ -21,8 +18,6 @@ fn db_init() -> DBStore {
 
 fn main() {
     println!("Welcome to Simple DataStore!");
-
-    let db: DBStore = db_init();
 
     println!("Enter key:");
     let mut key = String::new();
@@ -36,7 +31,13 @@ fn main() {
         .read_line(&mut val)
         .expect("Failed to read value");
 
-    let data: DBData = DBData::new(key, val);
+    let mut db: DBStore = db_init();
+    db.put(DBData::new(
+        key,
+        val,
+        Operation::ADD,
+        Utc::now().timestamp_millis()
+    ));
 
     println!("Key and value stored!");
 }
