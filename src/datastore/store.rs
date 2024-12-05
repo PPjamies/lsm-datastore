@@ -2,8 +2,8 @@ use crate::datastore::data::DBData;
 use crate::datastore::DBConfig;
 use crate::datastore::DBIndex;
 
-use crate::datastore::index::Operation;
 use crate::datastore::indexable::Indexable;
+use crate::datastore::operation::Operation;
 use crate::file::log_handler::{read, restore, scan, write};
 use chrono::Utc;
 use std::collections::HashMap;
@@ -46,9 +46,10 @@ impl DBStore {
                     offset,
                     length,
                     Operation::UPDATE,
-                    timestamp
-                )
-            ).expect("Unable to write to index log");
+                    timestamp,
+                ),
+            )
+            .expect("Unable to write to index log");
         }
     }
 
@@ -72,11 +73,9 @@ impl DBStore {
 
     pub fn create_index(&mut self, key: &str) {
         if !self.indexes.contains_key(&key) {
-
             // scan db for a given key > take note of offset and length of the data once found
             match scan(&self.config.log_path_index, &key) {
                 Ok(Some((_, offset, length))) => {
-
                     // add to in memory index
                     self.indexes
                         .insert(key.to_string(), IndexBucket { offset, length });
@@ -91,7 +90,8 @@ impl DBStore {
                             Operation::ADD,
                             Utc::now().timestamp_millis(),
                         ),
-                    ).expect("Unable to write to index log");
+                    )
+                    .expect("Unable to write to index log");
                 }
             }
         }
@@ -112,7 +112,8 @@ impl DBStore {
                     Operation::DELETE,
                     Utc::now().timestamp_millis(),
                 ),
-            ).expect("Unable to remove index");
+            )
+            .expect("Unable to remove index");
         }
     }
 
