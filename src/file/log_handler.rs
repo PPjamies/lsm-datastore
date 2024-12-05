@@ -1,6 +1,5 @@
 use crate::datastore::indexable::Indexable;
 use bincode;
-use chrono::Utc;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::fs::{File, OpenOptions};
@@ -17,11 +16,11 @@ where
     let mut buffer: Vec<u8> = vec![0; length];
     file.read_exact(&mut buffer)?;
 
-    bincode::deserialize_from(&buffer).map_err(Error::new)
+    bincode::deserialize_from(&*buffer).map_err(|e| Error::new(ErrorKind::InvalidData, e))
 }
 
 /// This function appends data to end of file and returns its byte offset, length, and timestamp
-pub fn write<T>(file_path: &str, data: T) -> Result<(u64, usize, i64)>
+pub fn write<T>(file_path: &str, data: &T) -> Result<(u64, usize)>
 where
     T: Serialize + Indexable,
 {
@@ -38,14 +37,12 @@ where
     file.write_all(&data)?;
     file.write_all(b"\n")?;
 
-    let timestamp: i64 = Utc::now().timestamp_millis();
-
-    Ok((offset, length, timestamp))
+    Ok((offset, length))
 }
 
 /// This function scans an append only log file for a given key and returns the newest data entry
 /// This function also returns the newest data entry's offset and length
-pub fn scan<T>(file_path: &str, key: &str) -> Result<(T, u64, usize)>
+pub fn scan<T>(file_path: &str, key: &str) -> Result<Option<(T, u64, usize)>>
 where
     T: Indexable,
 {
@@ -80,16 +77,24 @@ where
         current_offset += bytes.len() as u64;
     }
 
-    Ok((newest_data, offset, length))
+    // scan can result in data or no data found
+    match &newest_data {
+        Some(data) => Ok(Some((data, current_offset, length))),
+        None => Err(Error::new(ErrorKind::Other, "no data to scan")),
+    }
 }
 
 /// This function reads everything from the database into a vector
-pub fn restore<T>(file_path: &str) -> Result<Vec<T>>
+pub fn restore<T>(file_path: &str) -> Result<Option<Vec<T>>>
 where
     T: DeserializeOwned + Indexable,
 {
     let file: File = File::open(file_path)?;
     let reader: BufReader<File> = BufReader::new(file);
 
-    bincode::deserialize_from(reader).map_err(|e| Error::new(ErrorKind::InvalidData, e))
+    // file could contain no indexes
+    match bincode::deserialize_from(reader) {
+        Ok(data) => Ok(Some(data)),
+        Err(e) => Err(Error::new(ErrorKind::Other, "no data to restore")),
+    }
 }

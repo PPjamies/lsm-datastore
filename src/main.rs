@@ -1,10 +1,10 @@
 mod datastore;
 mod file;
 
+use crate::datastore::operation::Operation;
 use chrono::Utc;
 use datastore::data::DBData;
 use datastore::{DBConfig, DBStore};
-use crate::datastore::indexable::Operation;
 
 fn db_init() -> DBStore {
     let db_config: DBConfig = DBConfig::new(
@@ -36,7 +36,7 @@ fn main() {
         key,
         val,
         Operation::ADD,
-        Utc::now().timestamp_millis()
+        Utc::now().timestamp_millis(),
     ));
 
     println!("Key and value stored!");

@@ -1,4 +1,5 @@
-use crate::datastore::indexable::{Indexable, Operation};
+use crate::datastore::indexable::Indexable;
+use crate::datastore::operation::Operation;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
