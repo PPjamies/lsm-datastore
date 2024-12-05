@@ -1,9 +1,4 @@
-#[derive(Debug)]
-pub enum Operation {
-    ADD,
-    UPDATE,
-    DELETE,
-}
+use crate::datastore::operation::Operation;
 
 pub trait Indexable {
     fn key(&self) -> &str;

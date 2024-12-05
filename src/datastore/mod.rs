@@ -2,6 +2,7 @@ pub mod config;
 pub mod data;
 pub mod index;
 pub mod indexable;
+mod operation;
 pub mod store;
 
 pub use config::DBConfig;
