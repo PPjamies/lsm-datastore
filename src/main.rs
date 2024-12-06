@@ -8,7 +8,6 @@ use datastore::{DBConfig, DBStore};
 
 fn db_init() -> DBStore {
     let db_config: DBConfig = DBConfig::new(
-        String::from("Simple Datastore"),
         String::from("<path-to-log-file>"),
         String::from("<path-to-log-index-file>"),
     );
