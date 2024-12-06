@@ -86,27 +86,46 @@ impl DBStore {
                 self.update_index(data.key(), offset, length, Operation::ADD)?;
                 Ok(())
             }
-            Ok(None) => Err(Error::new(ErrorKind::NotFound, "Key not found in index log")),
+            Ok(None) => Err(Error::new(
+                ErrorKind::NotFound,
+                "Key not found in index log",
+            )),
             Err(err) => Err(err),
         }
     }
 
-    fn write_index_log(&self, key: &str, offset: u64, length: usize, operation: Operation) -> Result<()> {
-        write(&self.config.log_path_index, &DBIndex::new(
-            key.to_string(),
-            offset,
-            length,
-            operation,
-            Utc::now().timestamp_millis(),
-        ))?;
+    fn write_index_log(
+        &self,
+        key: &str,
+        offset: u64,
+        length: usize,
+        operation: Operation,
+    ) -> Result<()> {
+        write(
+            &self.config.log_path_index,
+            &DBIndex::new(
+                key.to_string(),
+                offset,
+                length,
+                operation,
+                Utc::now().timestamp_millis(),
+            ),
+        )?;
         Ok(())
     }
 
     /// Updates an index
-    fn update_index(&mut self, key: &str, offset: u64, length: usize, operation: Operation) -> Result<()> {
+    fn update_index(
+        &mut self,
+        key: &str,
+        offset: u64,
+        length: usize,
+        operation: Operation,
+    ) -> Result<()> {
         match &operation {
             Operation::ADD | Operation::UPDATE => {
-                self.indexes.insert(key.to_string(), IndexBucket { offset, length });
+                self.indexes
+                    .insert(key.to_string(), IndexBucket { offset, length });
                 self.write_index_log(key, offset, length, operation)?;
             }
             Operation::DELETE => {
@@ -122,5 +141,56 @@ impl DBStore {
         self.indexes.remove(key);
         self.write_index_log(key, 0, 0, Operation::DELETE)?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::path::Path;
+    use super::*;
+
+    fn setup() -> Result<()> {
+        // create log file
+        // create index file
+
+        // create config
+        // create db store
+
+        // create data
+        // create offset
+
+        Ok(())
+    }
+
+    fn tear_down(log_path: &str, index_path: &str) -> Result<()> {
+        let mut path = Path::new(log_path);
+        if path.exists() {
+            fs::remove_file(path)?;
+        }
+
+        path = Path::new(index_path);
+        if path.exists() {
+            fs::remove_file(path)?;
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn store_without_index() {
+        // write
+
+        // get
+
+        // todo: remove
+    }
+
+    #[test]
+    fn store_with_index() {
+        // write
+
+        // get
+
+        // todo: remove
     }
 }
