@@ -1,4 +1,5 @@
 pub mod config;
+pub(crate) mod converters;
 pub mod data;
 pub mod index;
 pub mod indexable;
