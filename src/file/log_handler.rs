@@ -5,7 +5,7 @@ use crate::datastore::store::IndexBucket;
 use crate::datastore::DBIndex;
 use bincode;
 use serde::de::DeserializeOwned;
-use serde::{Serialize};
+use serde::Serialize;
 use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
 use std::io::{BufReader, Error, ErrorKind, Read, Result, Seek, SeekFrom, Write};
@@ -118,4 +118,88 @@ pub fn restore_indexes(file_path: &str) -> Result<HashMap<String, IndexBucket>> 
     }
 
     Ok(map)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::datastore::data::DBData;
+    use crate::datastore::operation::Operation;
+    use crate::file::log_handler::{scan, write};
+    use chrono::Utc;
+    use std::fs;
+    use std::fs::File;
+    use std::path::Path;
+
+    fn setup() -> Result<(String, DBData, u64)> {
+        let temp_dir = std::env::temp_dir();
+        let temp_db_path = temp_dir.join("test_log_db.txt");
+        if !temp_db_path.exists() {
+            File::create(&temp_db_path)?;
+        }
+
+        let db_path = temp_db_path.to_string_lossy().to_string();
+        let db_data: DBData = DBData::new(
+            String::from("test-key"),
+            String::from("test-value"),
+            Operation::ADD,
+            Utc::now().timestamp_millis(),
+        );
+        let db_offset: u64 = 0;
+
+        Ok((db_path, db_data, db_offset))
+    }
+
+    fn tear_down(path: &str) -> Result<()> {
+        let path = Path::new(path);
+        if path.exists() {
+            fs::remove_file(path)?;
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn read_test() {
+        let (db_path, db_data, db_offset) = setup().unwrap();
+
+        match write::<DBData>(&db_path, &db_data) {
+            Ok((offset, length)) => {
+                assert_eq!(offset, db_offset, "Offset mismatch");
+
+                match read::<DBData>(&db_path, offset, length) {
+                    Ok(data) => {
+                        assert_eq!(data, db_data, "Data mismatch");
+                    }
+                    Err(err) => panic!("Read failed: {}", err),
+                }
+            }
+            Err(err) => panic!("Write failed: {}", err),
+        }
+
+        tear_down(&db_path).unwrap();
+    }
+
+    #[test]
+    fn scan_test() {
+        let (db_path, db_data, db_offset) = setup().unwrap();
+
+        match write(&db_path, &db_data) {
+            Ok((offset, length)) => {
+                assert_eq!(offset, db_offset, "Offset mismatch");
+
+                match scan::<DBData>(&db_path, &db_data.key) {
+                    Ok(Some((scanned_data, scanned_offset, scanned_length))) => {
+                        assert_eq!(scanned_data, db_data, "Data mismatch");
+                        assert_eq!(scanned_offset, offset, "Offset mismatch");
+                        assert_eq!(scanned_length, length, "Length mismatch");
+                    }
+                    Ok(None) => panic!("Scan did not find the data"),
+                    Err(err) => panic!("Scan failed: {}", err),
+                }
+            }
+            Err(err) => panic!("Write failed: {}", err),
+        }
+
+        tear_down(&db_path).unwrap();
+    }
 }

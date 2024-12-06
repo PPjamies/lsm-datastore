@@ -36,7 +36,7 @@ fn main() {
         val,
         Operation::ADD,
         Utc::now().timestamp_millis(),
-    ));
+    )).expect("TODO: panic message");
 
     println!("Key and value stored!");
 }
