@@ -9,9 +9,9 @@ use serde::Serialize;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fs::{File, OpenOptions};
-use std::io::{BufReader, Error, ErrorKind, Read, Result, Seek, SeekFrom, Write};
+use std::io::{BufRead, BufReader, Error, ErrorKind, Read, Result, Seek, SeekFrom, Write};
 
-/// This function appends data to end of file and returns its byte offset and length
+/// Appends data to end of file and returns its byte offset and length
 pub fn write<T>(path: &str, data: &T) -> Result<(u64, usize)>
 where
     T: Indexable + Serialize,
@@ -27,7 +27,7 @@ where
     Ok((offset, length))
 }
 
-/// This function reads data from the given byte offset
+/// Reads data from the given byte offset
 pub fn read<T>(path: &str, offset: u64, length: usize) -> Result<T>
 where
     T: Indexable + DeserializeOwned,
@@ -41,7 +41,7 @@ where
     bincode::deserialize_from(&*buffer).map_err(|e| Error::new(ErrorKind::InvalidData, e))
 }
 
-/// This function scans a log file for a given key and returns the newest data entry as well as its offset and length
+/// Scans a log file for a given key and returns the newest data entry as well as its offset and length
 pub fn scan<T>(path: &str, key: &str) -> Result<Option<(T, u64, usize)>>
 where
     T: Indexable + Serialize + DeserializeOwned + Clone,
@@ -94,7 +94,7 @@ where
     }
 }
 
-/// This function reads through an index log and restores an in memory index map
+/// Reads through an index log and restores an in memory index map
 pub fn restore_indexes(path: &str) -> Result<HashMap<String, IndexBucket>> {
     let file: File = File::open(path)?;
     let mut reader: BufReader<File> = BufReader::new(file);
@@ -121,6 +121,41 @@ pub fn restore_indexes(path: &str) -> Result<HashMap<String, IndexBucket>> {
     }
 
     Ok(map)
+}
+
+/// Returns a new log file with compacted data (duplicates removed + and newest data)
+pub fn compact_stream<T>(input_log_path: &str, output_log_path: &str) -> Result<()>
+where
+    T: Indexable + Serialize + DeserializeOwned + Clone,
+{
+    let file: File = File::open(input_log_path)?;
+    let mut reader: BufReader<File> = BufReader::new(file);
+
+    // truncate output log file
+    File::create(output_log_path)?;
+
+    // removes duplicate entries and maintains newest data
+    let mut latest_entries: HashMap<String, T> = HashMap::new();
+
+    loop {
+        match bincode::deserialize_from(&mut reader) {
+            Ok(data) => {
+                let data: T = data;
+
+                let key: String = data.key().to_string();
+                latest_entries.insert(key, data);
+            }
+            Err(_e) => {
+                break; //eof
+            }
+        }
+    }
+
+    for (_, val) in latest_entries {
+        write(&output_log_path, &val)?;
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
