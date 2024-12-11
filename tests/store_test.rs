@@ -1,39 +1,32 @@
-use simple_datastore::{DBConfig, DBStore, DBData, DBIndex, Operation};
+use simple_datastore::indexable::Indexable;
+use simple_datastore::{DBConfig, DBStore};
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use simple_datastore::{DBData, Operation};
     use std::fs;
     use std::fs::File;
+    use std::io::Result;
     use std::path::Path;
-    use chrono::Utc;
 
-    fn setup() -> std::io::Result<(DBStore, DBData, DBData)> {
+    fn setup() -> Result<(DBStore, String, String, String)> {
         let log_path = String::from("test_log.txt");
         File::create(Path::new(&log_path))?;
 
         let index_path = String::from("test_index_log.txt");
         File::create(Path::new(&index_path))?;
 
-        let mut db: DBStore = DBStore::new(DBConfig::new(log_path, index_path));
+        let db: DBStore = DBStore::new(DBConfig::new(log_path, index_path));
 
-        let old_data: DBData = DBData::new(
-            String::from("test-key-1"),
-            String::from("test-value-1"),
-            Operation::ADD,
-            Utc::now().timestamp_millis(),
-        );
-        let new_data: DBData = DBData::new(
-            String::from("test-key-2"),
-            String::from("test-value-2"),
-            Operation::ADD,
-            Utc::now().timestamp_millis(),
-        );
+        let key: String = "key".to_string();
+        let old_val: String = "val1".to_string();
+        let new_val: String = "val2-bigger".to_string();
 
-        Ok((db, old_data, new_data))
+        Ok((db, key, old_val, new_val))
     }
 
-    fn tear_down(log_path: &str, index_path: &str) -> std::io::Result<()> {
+    fn tear_down(log_path: &str, index_path: &str) -> Result<()> {
         if Path::new(&log_path).exists() {
             fs::remove_file(&log_path)?;
         }
@@ -46,65 +39,56 @@ mod tests {
     }
 
     #[test]
-    fn put_no_index() {
-        let (mut db, old_data, new_data) = setup().unwrap();
+    fn update_index_test() {
+        let (mut db, key, old_val, new_val) = setup().unwrap();
 
-        let key: &str = old_data.key();
+        let result = || -> Result<()> {
+            db.update_index(&key, 10, 10, Operation::ADD)?;
+            assert!(!db.indexes.is_empty());
+            assert!(db.indexes.contains_key(&key));
 
-        if let Err(err) = db.put(old_data) {
-            panic!("Put failed: {}", err);
+            db.update_index(&key, 12, 12, Operation::DELETE)?;
+            assert!(db.indexes.is_empty());
+
+            Ok(())
+        }();
+
+        tear_down(&db.config.log_path_db, &db.config.log_path_index).unwrap();
+
+        match result {
+            Ok(_) => {}
+            Err(e) => panic!("Failed to update index: {}", e),
         }
-
-        if let Err(err) = db.put(new_data) {
-            panic!("Put failed: {}", err);
-        }
-
-        match db.get(key) {
-            Ok(data) => {
-                assert_eq!(
-                    data, new_data,
-                    "Data mismatch. Scanning did not return the latest data."
-                );
-            }
-            Err(err) => panic!("Get failed: {}", err),
-        }
-
-        tear_down(&db.config.log_path_db, &db.config.log_path_index).unwrap()
     }
 
     #[test]
-    fn put_index() {
-        let (mut db, old_data, new_data) = setup().unwrap();
+    fn create_index_test() {
+        let (mut db, key, old_val, new_val) = setup().unwrap();
 
-        let key: String = old_data.key.clone();
+        let result = || -> Result<()> {
+            let (old_offset, old_length) = db.put(key.clone(), old_val.clone())?;
+            let (new_offset, new_length) = db.put(key.clone(), new_val.clone())?;
 
-        if let Err(err) = db.put(old_data) {
-            panic!("Put failed: {}", err);
+            let (index_offset, index_length) = db.create_index(&key)?;
+            assert!(db.indexes.contains_key(&key));
+            assert_eq!(index_offset, new_offset);
+            assert_eq!(index_length, new_length);
+
+            let data: DBData = db.get(&key)?;
+            assert_eq!(&data.key, &key, "Key mismatch");
+            assert_eq!(&data.val, &new_val, "Val mismatch");
+
+            db.delete_index(&key)?;
+            assert!(db.indexes.is_empty());
+
+            Ok(())
+        }();
+
+        tear_down(&db.config.log_path_db, &db.config.log_path_index).unwrap();
+
+        match result {
+            Ok(_) => {}
+            Err(e) => panic!("Put/Get (where key is not indexed) failed: {}", e),
         }
-
-        if let Err(err) = db.put(new_data) {
-            panic!("Put failed: {}", err);
-        }
-
-        match db.create_index(&key) {
-            Ok(_) => {
-                assert_eq!(db.indexes.len(), 1);
-                assert!(db.indexes.contains_key(&key));
-            }
-            Err(err) => panic!("Create index failed: {}", err),
-        }
-
-        // attempt to create index again should fail
-        let create_index_result = db.create_index(&key);
-        assert!(create_index_result.is_err(), "Expected an error but got {:?}", create_index_result);
-
-        match db.get(&key) {
-            Ok(data) => {
-                assert_eq!(data, new_data, "Data mismatch. Reading from index did not return the latest data.");
-            }
-            Err(err) => panic!("Get failed: {}", err),
-        }
-
-        tear_down(&db.config.log_path_db, &db.config.log_path_index).unwrap()
     }
 }

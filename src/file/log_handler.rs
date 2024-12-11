@@ -7,6 +7,7 @@ use bincode;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::collections::HashMap;
+use std::fmt::Debug;
 use std::fs::{File, OpenOptions};
 use std::io::{BufReader, Error, ErrorKind, Read, Result, Seek, SeekFrom, Write};
 
@@ -18,7 +19,6 @@ where
     let mut file: File = OpenOptions::new().write(true).append(true).open(path)?;
 
     let offset: u64 = file.seek(SeekFrom::End(0))?;
-
     let data: Vec<u8> = bincode::serialize(data).map_err(|e| Error::new(ErrorKind::Other, e))?;
     let length: usize = data.len();
 
@@ -44,7 +44,7 @@ where
 /// This function scans a log file for a given key and returns the newest data entry as well as its offset and length
 pub fn scan<T>(path: &str, key: &str) -> Result<Option<(T, u64, usize)>>
 where
-    T: Indexable + Serialize + DeserializeOwned,
+    T: Indexable + Serialize + DeserializeOwned + Clone,
 {
     let file: File = File::open(path)?;
     let mut reader: BufReader<File> = BufReader::new(file);
@@ -55,6 +55,7 @@ where
 
     let mut current_offset: u64 = 0;
     let mut current_length: usize = 0;
+
     loop {
         match bincode::deserialize_from(&mut reader) {
             Ok(data) => {
@@ -62,16 +63,16 @@ where
 
                 if key == data.key() {
                     let is_newer_data = match &newest_data {
-                        Some(old_data) => data.timestamp() > old_data.timestamp(),
+                        Some(old_data) => data.timestamp() >= old_data.timestamp(),
                         None => true,
                     };
 
                     if is_newer_data {
-                        newest_data = Some(data);
-                        length = current_length;
+                        length = bincode::serialized_size(&data)
+                            .map_err(|e| Error::new(ErrorKind::InvalidData, e))?
+                            as usize;
                         offset = current_offset;
-
-                        continue;
+                        newest_data = Some(data.clone());
                     }
                 }
 
@@ -133,7 +134,7 @@ mod tests {
     use std::path::Path;
 
     fn setup() -> Result<(String, DBData, DBData)> {
-        let path = String::from("test_log.txt");
+        let path = String::from("test_log.bin");
         File::create(Path::new(&path))?;
 
         let old_data: DBData = DBData::new(
@@ -143,8 +144,8 @@ mod tests {
             Utc::now().timestamp_millis(),
         );
         let new_data: DBData = DBData::new(
-            String::from("test-key-2"),
-            String::from("test-value-2"),
+            String::from("test-key-1"),
+            String::from("test-value-2-larger-size"),
             Operation::ADD,
             Utc::now().timestamp_millis(),
         );
@@ -152,28 +153,20 @@ mod tests {
         Ok((path, old_data, new_data))
     }
 
-    fn tear_down(path: &str) -> Result<()> {
-        if Path::new(&path).exists() {
-            fs::remove_file(&path)?;
-        }
-
-        Ok(())
-    }
-
-    fn scanner(path: &str, key: &str, data: (&DBData, u64, usize)) -> Result<()> {
-        let (data, offset, length) = data;
+    fn scanner(path: &str, key: &str, data: (&DBData, u64, usize)) -> Result<(DBData, u64, usize)> {
+        let (newest_data, newest_offset, newest_length) = data;
 
         match scan::<DBData>(path, key) {
-            Ok(Some((actual_data, actual_offset, actual_length))) => {
-                assert_eq!(actual_data, *data, "Data mismatch");
-                assert_eq!(actual_offset, offset, "Offset mismatch");
-                assert_eq!(actual_length, length, "Length mismatch");
+            Ok(Some((data, offset, length))) => {
+                assert_eq!(data, *newest_data, "Data mismatch");
+                assert_eq!(offset, newest_offset, "Offset mismatch");
+                assert_eq!(length, newest_length, "Length mismatch");
+
+                Ok((data, offset, length))
             }
             Ok(None) => panic!("Scan did not find the data"),
             Err(err) => panic!("Scan failed: {}", err),
         }
-
-        Ok(())
     }
 
     #[test]
@@ -181,7 +174,7 @@ mod tests {
         let (path, data, _) = setup().unwrap();
 
         let result = || -> Result<()> {
-            let (offset, length) = write(&path, &data)?;
+            let (offset, length) = write::<DBData>(&path, &data)?;
             assert_eq!(offset, 0, "Offset mismatch");
 
             let actual_data = read::<DBData>(&path, offset, length)?;
@@ -203,10 +196,13 @@ mod tests {
         let (path, old_data, new_data) = setup().unwrap();
 
         let result = || -> Result<()> {
-            let (old_offset, old_length) = write(&path, &old_data)?;
-            let (new_offset, new_length) = write(&path, &new_data)?;
+            let (old_offset, old_length) = write::<DBData>(&path, &old_data)?;
+            let (data, offset, length) =
+                scanner(&path, old_data.key(), (&old_data, old_offset, old_length))?;
 
-            scanner(&path, new_data.key(), (&new_data, new_offset, new_length))?;
+            let (new_offset, new_length) = write::<DBData>(&path, &new_data)?;
+            let (data, offset, length) =
+                scanner(&path, new_data.key(), (&new_data, new_offset, new_length))?;
 
             Ok(())
         }();
@@ -240,16 +236,22 @@ mod tests {
         );
 
         let result = || -> Result<()> {
-            write(&path, &old_data)?;
+            write::<DBIndex>(&path, &old_data)?;
 
             let mut map = restore_indexes(&path)?;
             assert!(!map.is_empty(), "Map should contain one index");
-            assert!(map.contains_key(&old_data.key), "Map should contain index key");
+            assert!(
+                map.contains_key(&old_data.key),
+                "Map should contain index key"
+            );
 
-            write(&path, &new_data)?;
+            write::<DBIndex>(&path, &new_data)?;
 
             map = restore_indexes(&path)?;
-            assert!(map.is_empty(), "Map should be empty after adding and deleting index.");
+            assert!(
+                map.is_empty(),
+                "Map should be empty after adding and deleting index."
+            );
 
             Ok(())
         }();

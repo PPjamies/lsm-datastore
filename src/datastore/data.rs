@@ -2,7 +2,7 @@ use crate::datastore::indexable::Indexable;
 use crate::datastore::operation::Operation;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct DBData {
     pub key: String,
     pub val: String,

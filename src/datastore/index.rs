@@ -2,7 +2,7 @@ use crate::datastore::indexable::Indexable;
 use crate::datastore::operation::Operation;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct DBIndex {
     pub key: String,
     pub offset: u64,

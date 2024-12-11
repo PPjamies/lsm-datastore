@@ -30,30 +30,33 @@ impl DBStore {
     }
 
     /// Creates or updates a key/val pair (DBData)
-    pub fn put(&mut self, data: DBData) -> Result<()> {
-        match write(&self.config.log_path_db, &data) {
+    pub fn put(&mut self, key: String, val: String) -> Result<(u64, usize)> {
+        let data: DBData = DBData::new(key, val, Operation::ADD, Utc::now().timestamp_millis());
+
+        match write::<DBData>(&self.config.log_path_db, &data) {
             Ok((offset, length)) => {
                 if self.indexes.contains_key(&data.key) {
                     self.update_index(data.key(), offset, length, Operation::UPDATE)?;
                 }
+                Ok((offset, length))
             }
             Err(err) => {
-                return Err(Error::new(
+                Err(Error::new(
                     ErrorKind::Other,
                     format!(
                         "Error while writing to log file: {}, {}",
                         self.config.log_path_db, err
                     ),
-                ));
+                ))
             }
         }
-        Ok(())
     }
 
     /// Read - if key is index then read from byte offset, otherwise, scan entire db for key
     pub fn get(&self, key: &str) -> Result<DBData> {
         if let Some(data) = self.indexes.get(key) {
-            return read(&self.config.log_path_db, data.offset, data.length);
+            println!("Get() {:?}", data);
+            return read::<DBData>(&self.config.log_path_db, data.offset, data.length);
         }
 
         match scan::<DBData>(&self.config.log_path_db, &key) {
@@ -76,15 +79,15 @@ impl DBStore {
     }
 
     /// Creates an index and mark index for creation (crash recovery)
-    pub fn create_index(&mut self, key: &str) -> Result<()> {
+    pub fn create_index(&mut self, key: &str) -> Result<(u64, usize)> {
         if self.indexes.contains_key(key) {
             return Err(Error::new(ErrorKind::AlreadyExists, "Key already exists"));
         }
 
-        match scan::<DBData>(&self.config.log_path_index, &key) {
+        match scan::<DBData>(&self.config.log_path_db, &key) {
             Ok(Some((data, offset, length))) => {
                 self.update_index(data.key(), offset, length, Operation::ADD)?;
-                Ok(())
+                Ok((offset, length))
             }
             Ok(None) => Err(Error::new(
                 ErrorKind::NotFound,
@@ -94,28 +97,24 @@ impl DBStore {
         }
     }
 
-    fn write_index_log(
+    pub fn write_index_log(
         &self,
         key: &str,
         offset: u64,
         length: usize,
         operation: Operation,
     ) -> Result<()> {
-        write(
-            &self.config.log_path_index,
-            &DBIndex::new(
-                key.to_string(),
-                offset,
-                length,
-                operation,
-                Utc::now().timestamp_millis(),
-            ),
-        )?;
+        write::<DBIndex>(&self.config.log_path_index, &DBIndex::new(
+            key.to_string(),
+            offset,
+            length,
+            operation,
+            Utc::now().timestamp_millis()))?;
         Ok(())
     }
 
     /// Updates an index
-    fn update_index(
+    pub fn update_index(
         &mut self,
         key: &str,
         offset: u64,
@@ -124,13 +123,13 @@ impl DBStore {
     ) -> Result<()> {
         match &operation {
             Operation::ADD | Operation::UPDATE => {
+                self.write_index_log(key, offset, length, operation)?;
                 self.indexes
                     .insert(key.to_string(), IndexBucket { offset, length });
-                self.write_index_log(key, offset, length, operation)?;
             }
             Operation::DELETE => {
-                self.indexes.remove(key);
                 self.write_index_log(key, 0, 0, operation)?;
+                self.indexes.remove(key);
             }
         }
         Ok(())
