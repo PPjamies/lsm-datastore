@@ -1,7 +1,10 @@
+use crate::file::file_handler;
+use crate::file::serializer::serialize;
 use crate::index::sstable::SSTableIndex;
+use chrono::Utc;
 use skiplist::SkipMap;
-use std::fs::File;
-use std::io::{Error, ErrorKind, Result};
+use std::io::Result;
+use std::ops::Bound;
 
 pub struct Memtable {
     pub data: SkipMap<String, String>,
@@ -26,32 +29,27 @@ impl Memtable {
         self.data.insert(key.to_string(), String::from("TOMBSTONE"));
     }
 
-    pub fn flush(&self, file_path: &str, index: &mut SSTableIndex) -> Result<(String, String)> {
-        let mut file = File::create(file_path)?;
+    pub fn flush(&self, file_path: &str, index: &mut SSTableIndex) -> Result<()> {
+        let data: Vec<_> = self.data.iter().collect();
 
-        let mut keys: Vec<String> = self.data.keys().cloned().collect();
-        keys.sort();
-
-        let min_key = keys.first().cloned().unwrap_or_else(|| String::new());
-        let max_key = keys.last().cloned().unwrap_or_else(|| String::new());
-
-        for (key, value) in &self.data {
-            writeln!(file, "{},{}", key, value)?;
-        }
-        file.sync_all()?;
-
-        index.add_sstable(
-            file_path.to_string(),
-            min_key.to_string(),
-            max_key.to_string(),
+        // create file path for new sstable
+        let Some((min_key, _)) = self.data.lower_bound(Bound::Included(&"a".to_string()));
+        let Some((max_key, _)) = self.data.upper_bound(Bound::Included(&"z".to_string()));
+        let file_path: String = format!(
+            "sstable_{}_{}_{}",
+            min_key,
+            max_key,
+            Utc::now().timestamp_millis().to_string()
         );
 
-        Ok((min_key, max_key))
+        file_handler::flush_to_file(&file_path, &data)?;
+
+        Ok(())
     }
 
     pub fn size(&self) -> Result<u64> {
-        let size: u64 =
-            bincode::serialized_size(&self.data).map_err(|e| Error::new(ErrorKind::Other, e))?;
-        Ok(size)
+        let data: Vec<(String, String)> = self.data.iter().collect();
+        let serialized_data: Vec<u8> = serialize(&data)?;
+        Ok(serialized_data.len() as u64)
     }
 }
