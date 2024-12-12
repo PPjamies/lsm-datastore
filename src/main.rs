@@ -11,7 +11,7 @@ fn db_init() -> DBStore {
 }
 
 fn main() {
-    println!("Welcome to Simple DataStore!");
+    println!("Welcome to LSM DataStore!");
 
     let _db: DBStore = db_init();
 }
