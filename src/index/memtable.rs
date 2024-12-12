@@ -1,6 +1,5 @@
-use crate::file::file_handler;
-use crate::file::serializer::serialize;
-use crate::index::sstable::SSTableIndex;
+use crate::file::flush_to_file;
+use crate::file::serialize;
 use chrono::Utc;
 use skiplist::SkipMap;
 use std::io::Result;
@@ -29,7 +28,7 @@ impl Memtable {
         self.data.insert(key.to_string(), String::from("TOMBSTONE"));
     }
 
-    pub fn flush(&self, file_path: &str, index: &mut SSTableIndex) -> Result<()> {
+    pub fn flush(&self) -> Result<()> {
         let data: Vec<_> = self.data.iter().collect();
 
         // create file path for new sstable
@@ -42,7 +41,7 @@ impl Memtable {
             Utc::now().timestamp_millis().to_string()
         );
 
-        file_handler::flush_to_file(&file_path, &data)?;
+        flush_to_file(&file_path, &data)?;
 
         Ok(())
     }

@@ -1,5 +1,9 @@
-pub mod file_handler;
-mod log_writer;
+mod file_handler;
 mod metadata;
-pub mod operation;
-pub(crate) mod serializer;
+mod operation;
+mod serializer;
+
+pub use file_handler::flush_to_file;
+pub use metadata::Metadata;
+pub use operation::*;
+pub use serializer::*;

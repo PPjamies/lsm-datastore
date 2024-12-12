@@ -1,4 +1,5 @@
 mod memtable;
 mod sstable;
 
-pub use sstable::{SSTable, SSTableIndex};
+pub use memtable::Memtable;
+pub use sstable::SSTable;
