@@ -1,4 +1,7 @@
-use crate::{load_from_json, Memtable, Metadata, SSTableSegment};
+use crate::{
+    convert_skipmap_to_vec, convert_vec_to_skipmap, flush, load_from_bytes, load_from_json,
+    Memtable, Metadata, SSTableSegment,
+};
 use bloom::{BloomFilter, ASMS};
 use std::io::Result;
 
@@ -12,12 +15,13 @@ pub struct Datastore {
 impl Datastore {
     pub fn new() -> Self {
         let metadata_path: String = String::from("src/metadata/metadata.json");
+        let database_recovery_path: String = String::from("src/database/recovery");
         let false_positive_rate: f32 = 0.01;
         let number_of_elements: u32 = 1_000_000;
         let size_threshold: u64 = 10 * 1024 * 1024; //10 MB
 
         Datastore {
-            metadata: Metadata::load_or_create(metadata_path),
+            metadata: Metadata::load_or_create(metadata_path, database_recovery_path),
             bloomfilter: BloomFilter::with_rate(false_positive_rate, number_of_elements),
             memtable: Memtable::new(),
             size_threshold,
@@ -64,6 +68,25 @@ impl Datastore {
                     return Ok(Some(sstable.read(&key).unwrap()));
                 }
             }
+        }
+    }
+
+    async fn snapshot(&self) {
+        flush(
+            &self.metadata.database_recovery_path,
+            &convert_skipmap_to_vec(&self.memtable.data),
+            false,
+        )
+        .await;
+    }
+
+    pub fn restore(&mut self) {
+        match load_from_bytes::<Vec<(u64, String)>>(&self.metadata.database_recovery_path) {
+            Ok(Some(data)) => {
+                self.memtable.data = convert_vec_to_skipmap(&data);
+            }
+            Ok(None) => {}
+            Err(e) => {}
         }
     }
 }

@@ -14,22 +14,24 @@ pub struct SSTableSegment {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Metadata {
-    pub path: String,
+    pub metadata_path: String,
+    pub database_recovery_path: String,
     pub segments: Vec<SSTableSegment>,
 }
 
 impl Metadata {
-    fn new(path: String) -> Self {
+    fn new(metadata_path: String, database_recovery_path: String) -> Self {
         Metadata {
-            path,
+            metadata_path,
+            database_recovery_path,
             segments: Vec::new(),
         }
     }
 
-    pub fn load_or_create(path: String) -> Self {
-        match load_from_json(&path) {
+    pub fn load_or_create(metadata_path: String, database_recovery_path: String) -> Self {
+        match load_from_json(&metadata_path) {
             Ok(Some(metadata)) => metadata,
-            Ok(None) => Self::new(path),
+            Ok(None) => Self::new(metadata_path, database_recovery_path),
             Err(e) => panic!("{}", e),
         }
     }
@@ -39,7 +41,7 @@ impl Metadata {
     }
 
     pub fn save(&self) -> Result<()> {
-        flush(&self.path, &self, true)?;
+        flush(&self.metadata_path, &self, true)?;
         Ok(())
     }
 }
