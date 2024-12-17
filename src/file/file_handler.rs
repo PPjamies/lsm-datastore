@@ -1,11 +1,34 @@
-use crate::file::serializer::serialize;
-use serde::Serialize;
+use crate::file::{deserialize_string, serialize};
+use serde::{Deserialize, Serialize};
+use std::fs;
 use std::fs::{File, OpenOptions};
-use std::io::{Result, Write};
+use std::io::{BufReader, Read, Result, Write};
 
-/// create a file if it doesn't exist or open existing file
-/// overwrite the file with data
-pub fn flush_to_file<T>(path: &str, data: &T) -> Result<()>
+pub fn create_dir(path: &str) -> Result<()> {
+    fs::create_dir_all(path)?;
+    Ok(())
+}
+
+pub fn load_from_json<T>(path: &str) -> Result<T>
+where
+    T: Deserialize,
+{
+    let file: File = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .read(true)
+        .open(path)?;
+    let mut reader: BufReader<File> = BufReader::new(file);
+
+    let mut content: String = String::new();
+    reader.read_to_string(&mut content)?;
+
+    let data: T = deserialize_string(&content);
+
+    Ok(data)
+}
+
+pub fn flush<T>(path: &str, data: &T, is_json: bool) -> Result<()>
 where
     T: Serialize,
 {
@@ -15,7 +38,7 @@ where
         .truncate(true)
         .open(path)?;
 
-    let data: Vec<u8> = serialize(data)?;
+    let data: Vec<u8> = serialize(&data, is_json)?;
 
     file.write_all(&data)?;
     file.sync_all()?;
