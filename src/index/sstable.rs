@@ -1,22 +1,33 @@
+extern crate bloom;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::io::Result;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SSTable {
-    pub data: HashMap<String, String>,
+    pub data: HashMap<u64, String>,
 }
 
 impl SSTable {
-    pub fn new(data: HashMap<String, String>) -> Self {
+    pub fn new(data: HashMap<u64, String>) -> Self {
         SSTable { data }
     }
 
-    pub fn scan() {
-        // TODO: retrieves all key/val pairs in the specified key range
+    pub fn scan(&self, start: &u64, end: &u64) -> Result<Option<Vec<(u64, String)>>> {
+        if (!self.contains(start) || !self.contains(end)) {
+            return Ok(None);
+        }
+
+        let mut result = Vec::new();
+        for (key, value) in self.data.iter() {
+            if key >= start && key <= end {
+                result.push((key.clone(), value.clone()));
+            }
+        }
+        Ok(Some(result))
     }
 
-    pub fn read(&self, key: &str) -> Option<&String> {
+    pub fn read(&self, key: &u64) -> Option<&String> {
         self.data.get(key)
     }
 
@@ -28,13 +39,14 @@ impl SSTable {
         // TODO: Writes a block of data to the SSTable.
     }
 
-    // TODO: optimize using bloom filter
-    pub fn contains(&self, key: &str) -> bool {
+    pub fn contains(&self, key: &u64) -> bool {
         self.data.contains_key(key)
     }
 
-    pub fn get_range() {
-        // TODO: returns min/max key
+    pub fn get_key_range(&self) -> Result<(u64, u64)> {
+        let min_key = self.data.keys().min().unwrap().clone();
+        let max_key = self.data.keys().max().unwrap().clone();
+        Ok((min_key, max_key))
     }
 
     pub fn merge(&mut self, other_sstable: &SSTable) -> Result<()> {

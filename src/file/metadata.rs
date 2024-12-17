@@ -5,8 +5,8 @@ use std::io::Result;
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct SSTableSegment {
     pub path: String,
-    pub min_key: String,
-    pub max_key: String,
+    pub min_key: u64,
+    pub max_key: u64,
     pub size: u64,
     pub timestamp: i64,
     pub is_compacted: bool,

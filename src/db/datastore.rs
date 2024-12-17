@@ -1,23 +1,30 @@
 use crate::{load_from_json, Memtable, Metadata, SSTableSegment};
+use bloom::{BloomFilter, ASMS};
 use std::io::Result;
 
-#[derive(Debug)]
 pub struct Datastore {
     pub metadata: Metadata,
+    pub bloomfilter: BloomFilter,
     pub memtable: Memtable,
     pub size_threshold: u64,
 }
 
 impl Datastore {
     pub fn new() -> Self {
+        let metadata_path: String = String::from("src/metadata/metadata.json");
+        let false_positive_rate: f32 = 0.01;
+        let number_of_elements: u32 = 1_000_000;
+        let size_threshold: u64 = 10 * 1024 * 1024; //10 MB
+
         Datastore {
-            metadata: Metadata::load_or_create(String::from("src/metadata/metadata.json")),
+            metadata: Metadata::load_or_create(metadata_path),
+            bloomfilter: BloomFilter::with_rate(false_positive_rate, number_of_elements),
             memtable: Memtable::new(),
-            size_threshold: 10 * 1024 * 1024, //10 MB
+            size_threshold,
         }
     }
 
-    pub fn put(&mut self, key: String, value: String) -> Result<()> {
+    pub fn put(&mut self, key: u64, value: String) -> Result<()> {
         let size: u64 = self.memtable.size()?;
         if size >= self.size_threshold {
             // store memtable to disk
@@ -33,17 +40,19 @@ impl Datastore {
             });
             self.metadata.save()?;
         }
+        self.bloomfilter.insert(&key);
         self.memtable.put(key, value);
         Ok(())
     }
 
-    pub fn get(&self, key: &str) -> Result<Option<String>> {
-        // check memtable for key
-        self.memtable.get(&key).map(|value| Ok(value));
+    pub fn get(&self, key: &u64) -> Result<Option<String>> {
+        if self.bloomfilter.contains(&key) {
+            self.memtable.get(&key).map(|value| Ok(value));
+        }
 
         // check sstable for key
         for segment in self.metadata.segments.iter().rev() {
-            if key.to_string() < segment.min_key || key.to_string() > segment.max_key {
+            if key.clone() < segment.min_key || key.clone() > segment.max_key {
                 continue;
             }
 
