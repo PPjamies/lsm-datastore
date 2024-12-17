@@ -58,4 +58,8 @@ impl Memtable {
             timestamp,
         ))
     }
+
+    pub fn snapshot(&self) {
+        //TODO: Creates a snapshot of the current state for consistent reads during flush operations.
+    }
 }
