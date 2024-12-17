@@ -1,15 +1,9 @@
 use crate::file::{deserialize_string, serialize};
 use serde::{Deserialize, Serialize};
-use std::fs;
 use std::fs::{File, OpenOptions};
 use std::io::{BufReader, Read, Result, Write};
 
-pub fn create_dir(path: &str) -> Result<()> {
-    fs::create_dir_all(path)?;
-    Ok(())
-}
-
-pub fn load_from_json<T>(path: &str) -> Result<T>
+pub fn load_from_json<T>(path: &str) -> Result<Option<T>>
 where
     T: Deserialize,
 {
@@ -23,9 +17,14 @@ where
     let mut content: String = String::new();
     reader.read_to_string(&mut content)?;
 
+    // file was created
+    if content.trim().is_empty() {
+        return Ok(None);
+    }
+
     let data: T = deserialize_string(&content);
 
-    Ok(data)
+    Ok(Some(data))
 }
 
 pub fn flush<T>(path: &str, data: &T, is_json: bool) -> Result<()>

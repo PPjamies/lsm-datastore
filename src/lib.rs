@@ -1,5 +1,6 @@
-mod index;
+mod db;
 mod file;
+mod index;
 
-pub use index::*;
 pub use file::*;
+pub use index::*;

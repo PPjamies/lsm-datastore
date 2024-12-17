@@ -1,35 +1,45 @@
 use crate::file::file_handler::*;
 use serde::{Deserialize, Serialize};
 use std::io::Result;
-use crate::index::SSTableMetadata;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+pub struct SSTableSegment {
+    pub path: String,
+    pub min_key: String,
+    pub max_key: String,
+    pub size: u64,
+    pub timestamp: i64,
+    pub is_compacted: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Metadata {
-    pub metadatas: Vec<SSTableMetadata>,
+    pub path: String,
+    pub segments: Vec<SSTableSegment>,
 }
 
 impl Metadata {
-    const METADATA_PATH: String = String::from("src/metadata/metadata.json");
-
-    fn new() -> Self {
+    fn new(path: String) -> Self {
         Metadata {
-            metadatas: Vec::new(),
+            path,
+            segments: Vec::new(),
         }
     }
 
-    pub fn load_or_create() -> Result<Self> {
-        match load_from_json(&Self::METADATA_PATH) {
-            Ok(metadata) => Ok(metadata),
-            None => Ok(Self::new()),
+    pub fn load_or_create(path: String) -> Self {
+        match load_from_json(&path) {
+            Ok(Some(metadata)) => metadata,
+            Ok(None) => Self::new(path),
+            Err(e) => panic!("{}", e),
         }
     }
 
-    pub fn add_metadata(&mut self, sstable_metadata: SSTableMetadata) {
-        self.metadatas.push(sstable_metadata);
+    pub fn add_segment(&mut self, segment: SSTableSegment) {
+        self.segments.push(segment);
     }
 
     pub fn save(&self) -> Result<()> {
-        flush(&Self::METADATA_PATH, self, true)?;
+        flush(&self.path, &self, true)?;
         Ok(())
     }
 }
