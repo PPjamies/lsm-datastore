@@ -31,14 +31,6 @@ impl SSTable {
         self.data.get(key)
     }
 
-    pub fn read_block(&self, key: &str, offset: u64, length: usize) {
-        // TODO: Reads a specific block of data using an offset.
-    }
-
-    pub fn write_block(&mut self, key: &str, data: String) {
-        // TODO: Writes a block of data to the SSTable.
-    }
-
     pub fn contains(&self, key: &u64) -> bool {
         self.data.contains_key(key)
     }
@@ -54,9 +46,5 @@ impl SSTable {
             self.data.insert(entry.key().clone(), entry.value().clone());
         }
         Ok(())
-    }
-
-    pub fn create_index() {
-        // TODO: builds an on-disk index
     }
 }
