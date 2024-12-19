@@ -36,7 +36,7 @@ impl Memtable {
         Ok(serialized_size(self.data.iter().collect()))?
     }
 
-    pub fn flush(&mut self) -> Result<(String, u64, u64, Vec<(u64, String)>, u64, i64)> {
+    pub fn flush(&mut self) -> Result<(String, u64, u64, u64, i64)> {
         let data: Vec<(u64, String)> = self.data.iter().collect();
 
         let size: u64 = self.size()?;
@@ -53,13 +53,6 @@ impl Memtable {
         // reset the Memtable
         self.data.clear();
 
-        Ok((
-            path,
-            min_key.clone(),
-            max_key.clone(),
-            data,
-            size,
-            timestamp,
-        ))
+        Ok((path, min_key.clone(), max_key.clone(), size, timestamp))
     }
 }

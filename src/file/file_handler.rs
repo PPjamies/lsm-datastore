@@ -1,5 +1,6 @@
 use crate::file::{deserialize_string, serialize};
 use serde::{Deserialize, Serialize};
+use std::fs;
 use std::fs::{File, OpenOptions};
 use std::io::{BufReader, Read, Result, Write};
 
@@ -65,5 +66,10 @@ where
     file.write_all(&data)?;
     file.sync_all()?;
 
+    Ok(())
+}
+
+pub fn delete(path: &str) -> Result<()> {
+    fs::remove_file(path)?;
     Ok(())
 }

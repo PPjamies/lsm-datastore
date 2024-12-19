@@ -9,7 +9,6 @@ pub struct SSTableSegment {
     pub max_key: u64,
     pub size: u64,
     pub timestamp: i64,
-    pub is_compacted: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

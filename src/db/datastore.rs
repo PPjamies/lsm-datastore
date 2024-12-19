@@ -1,8 +1,9 @@
 use crate::{
     convert_skipmap_to_vec, convert_vec_to_skipmap, flush, load_from_bytes, load_from_json,
-    Memtable, Metadata, SSTableSegment,
+    Memtable, Metadata, SSTable, SSTableSegment,
 };
-use bloom::{BloomFilter, ASMS};
+use bloom::BloomFilter;
+use std::cmp::Reverse;
 use std::io::Result;
 
 pub struct Datastore {
@@ -28,11 +29,30 @@ impl Datastore {
         }
     }
 
+    pub fn restore(&mut self) {
+        match load_from_bytes::<Vec<(u64, String)>>(&self.metadata.database_recovery_path) {
+            Ok(Some(data)) => {
+                self.memtable.data = convert_vec_to_skipmap(&data);
+            }
+            Ok(None) => {}
+            Err(e) => {}
+        }
+    }
+
+    async fn snapshot(&self) {
+        flush(
+            &self.metadata.database_recovery_path,
+            &convert_skipmap_to_vec(&self.memtable.data),
+            false,
+        )
+        .await;
+    }
+
     pub fn put(&mut self, key: u64, value: String) -> Result<()> {
         let size: u64 = self.memtable.size()?;
         if size >= self.size_threshold {
             // store memtable to disk
-            let (path, min_key, max_key, data, size, timestamp) = self.memtable.flush()?;
+            let (path, min_key, max_key, size, timestamp) = self.memtable.flush()?;
             // update + store metadata to disk
             self.metadata.add_segment(SSTableSegment {
                 path,
@@ -40,7 +60,6 @@ impl Datastore {
                 max_key,
                 size,
                 timestamp,
-                is_compacted: false,
             });
             self.metadata.save()?;
         }
@@ -71,22 +90,60 @@ impl Datastore {
         }
     }
 
-    async fn snapshot(&self) {
-        flush(
-            &self.metadata.database_recovery_path,
-            &convert_skipmap_to_vec(&self.memtable.data),
-            false,
-        )
-        .await;
-    }
+    pub fn merge_and_compact(&mut self) -> Result<()> {
+        let mut segments: Vec<SSTableSegment> = self.metadata.segments.clone();
+        segments.sort_by_key(|s| Reverse(s.timestamp));
 
-    pub fn restore(&mut self) {
-        match load_from_bytes::<Vec<(u64, String)>>(&self.metadata.database_recovery_path) {
-            Ok(Some(data)) => {
-                self.memtable.data = convert_vec_to_skipmap(&data);
+        let mut new_merged_and_compacted_segements: Vec<SSTableSegment> = Vec::new();
+
+        for i in 1..segments.len() {
+            let newer_segment = &segments[i - 1];
+            let older_segment = &segments[i];
+
+            let newer_sstable: SSTable =
+                load_from_bytes(&newer_segment.path)?.expect("Failed to load newer sstable");
+            let mut older_sstable: SSTable =
+                load_from_bytes(&older_segment.path)?.expect("Failed to load older sstable");
+
+            // merge newer sstable into older sstable - overwriting obsolete data - tombstone keys are removed
+            older_sstable.merge(&newer_sstable)?;
+
+            let older_sstable_size: u64 = older_sstable.size()?;
+
+            // overflow detected
+            if older_sstable_size > self.size_threshold {
+                // split the sstable
+                let mut new_sstable: SSTable = older_sstable.split(self.size_threshold)?;
+                // save sstable to disk
+                let (path, min_key, max_key, size, timestamp) = new_sstable.flush()?;
+                // create new segment
+                let new_segment: SSTableSegment = SSTableSegment {
+                    path,
+                    min_key,
+                    max_key,
+                    size,
+                    timestamp,
+                };
+                new_merged_and_compacted_segements.push(new_segment);
             }
-            Ok(None) => {}
-            Err(e) => {}
+
+            // save current sstable (with updated min/max keys) to disk
+            let (path, min_key, max_key, size, timestamp) = older_sstable.flush()?;
+            // create new segment
+            let older_sstable_updated_segment: SSTableSegment = SSTableSegment {
+                path,
+                min_key,
+                max_key,
+                size,
+                timestamp,
+            };
+            new_merged_and_compacted_segements.push(older_sstable_updated_segment);
         }
+
+        // update metadata
+        self.metadata.segments = new_merged_and_compacted_segements;
+        self.metadata.save()?;
+
+        Ok(())
     }
 }
